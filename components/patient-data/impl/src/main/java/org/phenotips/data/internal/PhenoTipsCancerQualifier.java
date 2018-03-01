@@ -17,12 +17,16 @@
  */
 package org.phenotips.data.internal;
 
-import org.phenotips.data.CancerMetadatum;
+import org.phenotips.data.CancerQualifier;
 
 import org.json.JSONObject;
 
-public class PhenoTipsCancerMetadatum implements CancerMetadatum
+import java.util.Map;
+
+public class PhenoTipsCancerQualifier implements CancerQualifier
 {
+    private Map<String, Object> qualifier;
+
     @Override
     public String getId()
     {

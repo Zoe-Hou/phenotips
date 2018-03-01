@@ -17,8 +17,9 @@
  */
 package org.phenotips.data.internal.controller;
 
-import org.phenotips.Constants;
+import com.xpn.xwiki.XWikiException;
 import org.phenotips.data.Cancer;
+import org.phenotips.data.CancerQualifier;
 import org.phenotips.data.IndexedPatientData;
 import org.phenotips.data.Patient;
 import org.phenotips.data.PatientData;
@@ -27,15 +28,18 @@ import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.internal.PhenoTipsCancer;
 
 import org.xwiki.component.annotation.Component;
-import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -65,10 +69,6 @@ import com.xpn.xwiki.objects.BaseObject;
 @Singleton
 public class CancersController extends AbstractComplexController<Cancer>
 {
-    /** The XClass used for storing cancer data. */
-    static final EntityReference CANCER_CLASS_REFERENCE = new EntityReference("CancerClass",
-            EntityType.DOCUMENT, Constants.CODE_SPACE_REFERENCE);
-
     private static final String CANCERS_FIELD_NAME = "cancers";
 
     private static final String CONTROLLER_NAME = CANCERS_FIELD_NAME;
@@ -82,48 +82,60 @@ public class CancersController extends AbstractComplexController<Cancer>
     @Inject
     private Provider<XWikiContext> xcontextProvider;
 
+    @Nonnull
+    EntityReference getEntityReference()
+    {
+        return Cancer.CLASS_REFERENCE;
+    }
+
     @Override
+    @Nonnull
     protected List<String> getBooleanFields()
     {
         return Collections.singletonList(JSON_KEY_PRIMARY);
     }
 
     @Override
+    @Nonnull
     protected List<String> getCodeFields()
     {
         return Collections.emptyList();
     }
 
     @Override
+    @Nonnull
     protected List<String> getProperties()
     {
         return Collections.emptyList();
     }
 
     @Override
+    @Nonnull
     protected String getJsonPropertyName()
     {
         return CONTROLLER_NAME;
     }
 
     @Override
+    @Nonnull
     public String getName()
     {
         return CONTROLLER_NAME;
     }
 
     @Override
+    @Nullable
     public PatientData<Cancer> load(@Nonnull final Patient patient)
     {
         try{
             final XWikiDocument doc = patient.getXDocument();
-            final List<BaseObject> cancerXWikiObjects = doc.getXObjects(CANCER_CLASS_REFERENCE);
+            final List<BaseObject> cancerXWikiObjects = doc.getXObjects(getEntityReference());
             if (CollectionUtils.isEmpty(cancerXWikiObjects)) {
                 return null;
             }
             final List<Cancer> cancers = cancerXWikiObjects.stream()
                     .filter(cancerObj -> cancerObj != null && !cancerObj.getFieldList().isEmpty())
-                    .map(PhenoTipsCancer::new)
+                    .map(cancerObj -> wrapCancer(doc, cancerObj))
                     .collect(Collectors.toList());
             return !cancers.isEmpty() ? new IndexedPatientData<>(getName(), cancers) : null;
         } catch (final Exception e) {
@@ -132,13 +144,18 @@ public class CancersController extends AbstractComplexController<Cancer>
         return null;
     }
 
+    private Cancer wrapCancer(@Nonnull final XWikiDocument doc, @Nonnull final BaseObject cancerObj)
+    {
+        return new PhenoTipsCancer(doc, cancerObj);
+    }
+
     @Override
     public void writeJSON(
             @Nonnull final Patient patient,
             @Nonnull final JSONObject json,
             @Nullable final Collection<String> selectedFieldNames)
     {
-        if (selectedFieldNames == null || selectedFieldNames.contains(CANCERS_FIELD_NAME)) {
+        if (selectedFieldNames == null || selectedFieldNames.contains(getJsonPropertyName())) {
             final JSONArray cancersJson = new JSONArray();
             final PatientData<Cancer> data = patient.getData(getName());
             if (data != null && data.size() != 0 && data.isIndexed()) {
@@ -162,9 +179,10 @@ public class CancersController extends AbstractComplexController<Cancer>
     }
 
     @Override
+    @Nullable
     public PatientData<Cancer> readJSON(@Nullable final JSONObject json)
     {
-        if (json == null || !json.has(getJsonPropertyName())) {
+        if (json == null || json.getJSONArray(getJsonPropertyName()) == null) {
             return null;
         }
         try {
@@ -195,7 +213,7 @@ public class CancersController extends AbstractComplexController<Cancer>
             final PatientData<Cancer> cancers = patient.getData(getName());
             if (cancers == null) {
                 if (PatientWritePolicy.REPLACE.equals(policy)) {
-                    docX.removeXObjects(CANCER_CLASS_REFERENCE);
+                    docX.removeXObjects(getEntityReference());
                 }
             } else {
                 if (!cancers.isIndexed()) {
@@ -207,5 +225,67 @@ public class CancersController extends AbstractComplexController<Cancer>
         } catch (final Exception ex) {
             this.logger.error("Failed to save cancers data: {}", ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Saves the {@code cancers} retrieved from {@code patient} according to the specified save {@code policy}.
+     *
+     * @param docX the {@link XWikiDocument} where data will be saved
+     * @param patient the {@link Patient} object that contains the required data
+     * @param cancers the cancers {@link PatientData} object
+     * @param policy the {@link PatientWritePolicy} according to which data should be saved
+     * @param context the current {@link XWikiContext}
+     */
+    private void saveCancers(@Nonnull final XWikiDocument docX,
+                             @Nonnull final Patient patient,
+                             @Nonnull final PatientData<Cancer> cancers,
+                             @Nonnull final PatientWritePolicy policy,
+                             @Nonnull final XWikiContext context)
+    {
+
+        if (PatientWritePolicy.MERGE.equals(policy)) {
+            final Map<String, Cancer> mergedCancers = getMergedCancers(cancers, load(patient));
+            clearOldCancerData(docX);
+            mergedCancers.forEach((id, cancer) -> saveCancer(docX, cancer, context));
+        } else {
+            clearOldCancerData(docX);
+            cancers.forEach(cancer -> saveCancer(docX, cancer, context));
+        }
+    }
+
+    private void saveCancer(@Nonnull final XWikiDocument docX,
+                            @Nonnull final Cancer cancer,
+                            @Nonnull final XWikiContext context)
+    {
+        try {
+            cancer.write(docX.newXObject(getEntityReference(), context), context);
+            final Collection<CancerQualifier> qualifiers = cancer.getQualifiers();
+        } catch (final XWikiException e) {
+            this.logger.error("Failed to update cancer: [{}]", cancer.getId());
+        }
+    }
+
+    private void clearOldCancerData(@Nonnull final XWikiDocument docX)
+    {
+        docX.removeXObjects(getEntityReference());
+        docX.removeXObjects(CancerQualifier.CLASS_REFERENCE);
+    }
+
+    @Nonnull
+    private Map<String, Cancer> getMergedCancers(@Nonnull final PatientData<Cancer> cancers,
+                                                 @Nullable final PatientData<Cancer> storedCancers)
+    {
+        final Stream<Cancer> storedCancerStream = storedCancers != null
+                ? IntStream.range(0, storedCancers.size()).mapToObj(storedCancers::get)
+                : Stream.empty();
+        final Stream<Cancer> cancerStream = IntStream.range(0, cancers.size()).mapToObj(cancers::get);
+        return Stream.concat(storedCancerStream, cancerStream)
+                .collect(Collectors.toMap(Cancer::getId, Function.identity(), this::mergeCancers, LinkedHashMap::new));
+    }
+
+    @Nonnull
+    private Cancer mergeCancers(@Nonnull final Cancer oldCancer, @Nonnull final Cancer newCancer)
+    {
+        return oldCancer.mergeData(newCancer);
     }
 }

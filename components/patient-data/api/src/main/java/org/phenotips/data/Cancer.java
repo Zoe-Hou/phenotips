@@ -17,11 +17,15 @@
  */
 package org.phenotips.data;
 
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.objects.BaseObject;
+import org.phenotips.Constants;
+import org.xwiki.model.EntityType;
+import org.xwiki.model.reference.EntityReference;
 import org.xwiki.stability.Unstable;
 
+import javax.annotation.Nonnull;
 import java.util.Collection;
-
-import org.json.JSONObject;
 
 /**
  * Information about a specific cancer recorded for a {@link Patient patient}.
@@ -32,6 +36,9 @@ import org.json.JSONObject;
 @Unstable
 public interface Cancer extends VocabularyProperty
 {
+    /** The XClass used for storing cancer data. */
+    EntityReference CLASS_REFERENCE = new EntityReference("CancerClass", EntityType.DOCUMENT,
+            Constants.CODE_SPACE_REFERENCE);
     /**
      * Returns true iff the {@link Patient} is affected with the cancer.
      *
@@ -40,29 +47,32 @@ public interface Cancer extends VocabularyProperty
     boolean isAffected();
 
     /**
-     * A collection of {@link CancerMetadatum} associated with the cancer. Cancer qualifiers include data such
-     * as cancer type, age at diagnosis, and laterality. Each cancer may have several {@link CancerMetadatum}
+     * A collection of {@link CancerQualifier} associated with the cancer. Cancer qualifiers include data such
+     * as cancer type, age at diagnosis, and laterality. Each cancer may have several {@link CancerQualifier}
      * associated with it.
      *
-     * @return a collection of {@link CancerMetadatum} associated with the given {@link Cancer}
+     * @return a collection of {@link CancerQualifier} associated with the given {@link Cancer}
      */
-    Collection<CancerMetadatum> getQualifiers();
+    @Nonnull
+    Collection<CancerQualifier> getQualifiers();
 
     /**
-     * Retrieve all information about this cancer and its associated qualifiers in a JSON format. For example:
+     * Merges data contained in {@code cancer} into this object iff the two objects have the same {@link #getId() id}.
+     * If both objects contain colliding values for the same property, a choice will be made in favour of the value in
+     * {@code cancer}.
      *
-     * <pre>
-     * {
-     *   "id": "HP:0009726",
-     *   "affected": true,
-     *   "qualifiers": [
-     *     // See the documentation for {@link CancerMetadatum#toJSON()}
-     *   ]
-     * }
-     * </pre>
-     *
-     * @return the cancer data, using the org.json classes
+     * @param cancer the {@link Cancer} object containing data that will be merged in
+     * @return the updated {@link Cancer} object
+     * @throws IllegalArgumentException iff the two objects do not have the same {@link #getId()}
      */
-    @Override
-    JSONObject toJSON();
+    @Nonnull
+    Cancer mergeData(@Nonnull final Cancer cancer);
+
+    /**
+     * Writes cancer data to {@code baseObject}.
+     *
+     * @param baseObject the {@link BaseObject} that will store cancer data
+     * @param context the current {@link XWikiContext}
+     */
+    void write(@Nonnull BaseObject baseObject, @Nonnull XWikiContext context);
 }

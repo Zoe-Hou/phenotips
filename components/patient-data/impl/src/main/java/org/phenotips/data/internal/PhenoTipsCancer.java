@@ -17,22 +17,25 @@
  */
 package org.phenotips.data.internal;
 
-import org.phenotips.Constants;
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.doc.XWikiDocument;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.phenotips.data.Cancer;
-import org.phenotips.data.CancerMetadatum;
-
-import org.xwiki.model.EntityType;
-import org.xwiki.model.reference.EntityReference;
+import org.phenotips.data.CancerQualifier;
 
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 import org.json.JSONObject;
 
 import com.xpn.xwiki.objects.BaseObject;
-
-import javafx.beans.property.ListProperty;
 
 /**
  * Implementation of patient data based on the XWiki data model, where cancer data is represented by properties in
@@ -43,32 +46,24 @@ import javafx.beans.property.ListProperty;
  */
 public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty implements Cancer
 {
-    /** The XClass used for storing cancer data. */
-    protected static final EntityReference CANCER_CLASS_REFERENCE = new EntityReference("CancerClass",
-            EntityType.DOCUMENT, Constants.CODE_SPACE_REFERENCE);
+    protected static final String CANCER_PROPERTY = "cancer";
 
-    /** The XClass used for storing cancer qualifiers data. */
-    protected static final EntityReference CANCER_QUALIFIER_CLASS_REFERENCE =
-            new EntityReference("CancerQualifierClass", EntityType.DOCUMENT, Constants.CODE_SPACE_REFERENCE);
+    protected static final String AFFECTED_PROPERTY = "affected";
 
-    protected static final String INTERNAL_CANCER_PROPERTY = "cancer";
-
-    protected static final String INTERNAL_AFFECTED_PROPERTY = "affected";
-
-    protected static final String INTERNAL_QUALIFIERS_PROPERTY = "qualifiers";
+    protected static final String JSON_QUALIFIERS_PROPERTY = "qualifiers";
 
     protected static final String JSON_CANCER_PROPERTY = "id";
 
-    protected static final String JSON_AFFECTED_PROPERTY = INTERNAL_AFFECTED_PROPERTY;
+    private Set<CancerQualifier> qualifiers;
 
-    protected static final String JSON_QUALIFIERS_PROPERTY = INTERNAL_QUALIFIERS_PROPERTY;
+    private boolean affected;
 
     /**
      * Constructor that copies the data from a {@code cancerObject}.
      *
      * @param cancerObject the cancer {@link BaseObject}
      */
-    public PhenoTipsCancer(@Nonnull final BaseObject cancerObject)
+    public PhenoTipsCancer(@Nonnull final XWikiDocument doc, @Nonnull final BaseObject cancerObject)
     {
         super("ab");
     }
@@ -81,30 +76,76 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     @Override
     public boolean isAffected()
     {
-        return false;
+        return this.affected;
     }
 
-    @Override
-    public Collection<CancerMetadatum> getQualifiers()
+    public void setAffected(final boolean affected)
     {
-        return null;
+        this.affected = affected;
     }
 
     @Override
+    @Nonnull
+    public Collection<CancerQualifier> getQualifiers()
+    {
+        return Collections.unmodifiableSet(this.qualifiers);
+    }
+
+    public void setQualifiers(@Nullable final Collection<CancerQualifier> qualifiers)
+    {
+        this.qualifiers = CollectionUtils.isNotEmpty(qualifiers) ? new HashSet<>(qualifiers) : new HashSet<>();
+    }
+
+    private boolean addQualifiers(@Nullable final Collection<CancerQualifier> qualifiers)
+    {
+        return CollectionUtils.isNotEmpty(qualifiers) && this.qualifiers.addAll(qualifiers);
+    }
+
+    @Override
+    @Nonnull
     public String getId()
     {
-        return null;
+        return this.id;
     }
 
     @Override
+    @Nullable
     public String getName()
     {
-        return null;
+        return this.name;
+    }
+
+    public void setName(@Nullable final String name)
+    {
+        if (StringUtils.isNotBlank(name)) {
+            this.name = name;
+        }
     }
 
     @Override
+    @Nonnull
     public JSONObject toJSON()
     {
         return null;
+    }
+
+    @Nonnull
+    @Override
+    public Cancer mergeData(@Nonnull final Cancer cancer)
+    {
+        if (!Objects.equals(getId(), cancer.getId())) {
+            throw new IllegalArgumentException("Cannot merge cancer objects with different identifiers");
+        }
+        setAffected(cancer.isAffected());
+        setName(cancer.getName());
+        addQualifiers(cancer.getQualifiers());
+        return this;
+    }
+
+    @Override
+    public void write(@Nonnull final BaseObject baseObject, @Nonnull final XWikiContext context)
+    {
+        baseObject.set(CANCER_PROPERTY, getId(), context);
+        baseObject.set(AFFECTED_PROPERTY, isAffected(), context);
     }
 }

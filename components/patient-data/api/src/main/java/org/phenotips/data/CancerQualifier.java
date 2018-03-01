@@ -17,25 +17,35 @@
  */
 package org.phenotips.data;
 
+import org.phenotips.Constants;
+import org.xwiki.model.EntityType;
+import org.xwiki.model.reference.EntityReference;
 import org.xwiki.stability.Unstable;
 
+import java.util.Arrays;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.json.JSONObject;
 
 /**
- * Information about a {@link Patient patient}'s {@link Cancer cancer} properties (qualifiers).
+ * Information about the {@link Patient patient}'s {@link Cancer cancer} metadatum (qualifiers).
  *
  * @version $Id$
  * @since 1.4
  */
 @Unstable
-public interface CancerMetadatum extends VocabularyProperty
+public interface CancerQualifier extends VocabularyProperty
 {
+    /** The XClass used for storing cancer metadata. */
+    EntityReference CLASS_REFERENCE = new EntityReference("CancerQualifierClass", EntityType.DOCUMENT,
+            Constants.CODE_SPACE_REFERENCE);
+
     /**
      * The supported qualifier types.
      */
-    enum Type
+    enum Meta
     {
         /** The age at which the cancer is diagnosed. */
         AGE_AT_DIAGNOSIS("ageAtDiagnosis"),
@@ -46,18 +56,18 @@ public interface CancerMetadatum extends VocabularyProperty
         /** The localization with respect to the side of the body of the specified cancer. */
         LATERALITY("laterality");
 
-        /** @see #getId() */
-        private final String id;
+        /** @see #getName() */
+        private final String name;
 
         /**
-         * Constructor that initializes the {@link #getId() vocabulary term identifier}.
+         * Constructor that initializes the meta-datum.
          *
-         * @param id an identifier, in the format {@code VOCABULARY:termId}
-         * @see #getId()
+         * @param name the name of the meta-datum
+         * @see #getName()
          */
-        Type(final String id)
+        Meta(final String name)
         {
-            this.id = id;
+            this.name = name;
         }
 
         @Override
@@ -67,18 +77,28 @@ public interface CancerMetadatum extends VocabularyProperty
         }
 
         /**
-         * Get the vocabulary term identifier associated to this type of qualifier.
+         * Get the name of this meta-datum.
          *
-         * @return an identifier, in the format {@code VOCABULARY:termId}
+         * @return the name of the meta-datum
          */
-        public String getId()
+        public String getName()
         {
-            return this.id;
+            return this.name;
+        }
+
+        /**
+         * Get all possible meta values.
+         *
+         * @return a {@link Set} of all possible meta values
+         */
+        public static Set<String> getNames()
+        {
+            return Arrays.stream(Meta.values()).map(Meta::getName).collect(Collectors.toSet());
         }
     }
 
     /**
-     * Retrieve information about these qualifiers in a JSON format. For example:
+     * Retrieve information about this metadata in a JSON format. For example:
      *
      * <pre>
      * {
