@@ -21,27 +21,137 @@ import org.phenotips.data.CancerQualifier;
 
 import org.json.JSONObject;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class PhenoTipsCancerQualifier implements CancerQualifier
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.objects.BaseObject;
+
+public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyProperty implements CancerQualifier
 {
-    private Map<String, Object> qualifier;
+    private static final String ID = "id";
 
-    @Override
-    public String getId()
+    /** All the permitted qualifier properties. */
+    private static final CancerQualifierProperty[] PROPERTIES = CancerQualifierProperty.values();
+
+    /** The qualifier data. */
+    private final Map<String, Object> qualifier;
+
+    /**
+     * The constructor that takes the qualifier {@link BaseObject} as a parameter.
+     *
+     * @param qualifierObj the {@link BaseObject} that contains qualifier data
+     */
+    PhenoTipsCancerQualifier(@Nonnull final BaseObject qualifierObj)
     {
-        return null;
+        super(qualifierObj.getStringValue(ID));
+        this.qualifier = Arrays.stream(PROPERTIES)
+            .collect(LinkedHashMap::new, (m, p) -> extractValueFromBaseObj(qualifierObj, m, p), LinkedHashMap::putAll);
+    }
+
+    /**
+     * The constructor that takes a {@link JSONObject} as a parameter.
+     *
+     * @param json the {@link JSONObject} that contains qualifier data
+     */
+    PhenoTipsCancerQualifier(@Nonnull final JSONObject json)
+    {
+        super(json);
+        this.qualifier = Arrays.stream(PROPERTIES)
+            .collect(LinkedHashMap::new, (m, p) -> extractValueFromJson(json, m, p), LinkedHashMap::putAll);
     }
 
     @Override
-    public String getName()
+    public void write(@Nonnull final BaseObject baseObject, final @Nonnull XWikiContext context)
     {
-        return null;
+        baseObject.set(ID, getId(), context);
+        this.qualifier.forEach((property, value) -> writeProperty(baseObject, property, value, context));
+    }
+
+    /**
+     * Writes a {@code property} to {@code baseObject} if the {@code property} is defined.
+     *
+     * @param baseObject the {@link BaseObject} where data will be written
+     * @param property the property of interest
+     * @param value the property value
+     * @param context the current {@link XWikiContext}
+     */
+    private void writeProperty(@Nonnull final BaseObject baseObject,
+                               @Nonnull final String property,
+                               @Nullable final Object value,
+                               @Nonnull final XWikiContext context)
+    {
+        if (value != null) {
+            baseObject.set(property, value, context);
+        }
+    }
+
+    @Nullable
+    @Override
+    public Object getProperty(@Nonnull final CancerQualifierProperty property)
+    {
+        return this.qualifier.get(property.getProperty());
+    }
+
+    /**
+     * Sets the {@code value} for {@code property} if the {@code value} is valid.
+     *
+     * @param property the {@link CancerQualifierProperty} of interest
+     * @param value the value for the property
+     */
+    public void setProperty(@Nonnull final CancerQualifierProperty property, @Nullable final Object value)
+    {
+        if (property.valueIsValid(value)) {
+            this.qualifier.put(property.getProperty(), value);
+        }
     }
 
     @Override
+    @Nonnull
     public JSONObject toJSON()
     {
         return null;
+    }
+
+    /**
+     * Extracts the property value from the provided {@code json}, and populates the {@code propertyMap} if there is a
+     * value specified for the property.
+     *
+     * @param json the {@link JSONObject} that contains the values for qualifier properties
+     * @param propertyMap the {@link Map} of qualifier properties to their values
+     * @param property the {@link CancerQualifierProperty} property of interest
+     */
+    private void extractValueFromJson(@Nonnull final JSONObject json,
+                                      @Nonnull final Map<String, Object> propertyMap,
+                                      @Nonnull final CancerQualifierProperty property)
+    {
+        final String propertyStr = property.getProperty();
+        final Object value = json.opt(propertyStr);
+        if (value != null) {
+            propertyMap.put(propertyStr, value);
+        }
+    }
+
+    /**
+     * Extracts the property value from the provided {@code qualifierObj}, and populates the {@code propertyMap} if
+     * there is a value specified for the property.
+     *
+     * @param qualifierObj the {@link BaseObject} that contains the values for qualifier properties
+     * @param propertyMap the {@link Map} of qualifier properties to their values
+     * @param property the {@link CancerQualifierProperty} property of interest
+     */
+    private void extractValueFromBaseObj(@Nonnull final BaseObject qualifierObj,
+                                         @Nonnull final LinkedHashMap<String, Object> propertyMap,
+                                         @Nonnull final CancerQualifierProperty property)
+    {
+        final String propertyStr = property.getProperty();
+        final Object value = property.extractValue(qualifierObj);
+        if (value != null) {
+            propertyMap.put(propertyStr, value);
+        }
     }
 }

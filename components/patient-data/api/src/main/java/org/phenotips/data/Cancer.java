@@ -66,7 +66,7 @@ public interface Cancer extends VocabularyProperty
      * @throws IllegalArgumentException iff the two objects do not have the same {@link #getId()}
      */
     @Nonnull
-    Cancer mergeData(@Nonnull final Cancer cancer);
+    Cancer mergeData(@Nonnull Cancer cancer);
 
     /**
      * Writes cancer data to {@code baseObject}.

@@ -22,15 +22,17 @@ import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
 import org.xwiki.stability.Unstable;
 
-import java.util.Arrays;
 import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import org.json.JSONObject;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.objects.BaseObject;
+import com.xpn.xwiki.objects.BaseStringProperty;
 
 /**
- * Information about the {@link Patient patient}'s {@link Cancer cancer} metadatum (qualifiers).
+ * Information about the {@link Patient patient}'s {@link CancerQualifier qualifier} metadatum.
  *
  * @version $Id$
  * @since 1.4
@@ -43,31 +45,84 @@ public interface CancerQualifier extends VocabularyProperty
             Constants.CODE_SPACE_REFERENCE);
 
     /**
-     * The supported qualifier types.
+     * The supported qualifier properties.
      */
-    enum Meta
+    enum CancerQualifierProperty
     {
-        /** The age at which the cancer is diagnosed. */
+        /** An age at which the cancer is diagnosed. */
         AGE_AT_DIAGNOSIS("ageAtDiagnosis"),
+
         /** The numeric age estimate at which the cancer is diagnosed. */
-        NUMERIC_AGE_AT_DIAGNOSIS("numericAgeAtDiagnosis"),
-        /** The type of cancer -- can be primary or metastasized. */
-        PRIMARY("primary"),
+        NUMERIC_AGE_AT_DIAGNOSIS("numericAgeAtDiagnosis") {
+            @Nullable
+            @Override
+            public Object extractValue(@Nonnull final BaseObject qualifier)
+            {
+                final int value = qualifier.getIntValue(this.property, -1);
+                return value == -1 ? null : value;
+            }
+
+            @Override
+            public boolean valueIsValid(@Nullable final Object value) {
+                return value != null && value instanceof Integer;
+            }
+        },
+
+        /** The type of cancer -- can be primary or metastasized (if primary is false). */
+        PRIMARY("primary") {
+            @Nullable
+            @Override
+            public Object extractValue(@Nonnull final BaseObject qualifier)
+            {
+                final int value = qualifier.getIntValue(this.property, -1);
+                return value == -1 ? null : (value == 1);
+            }
+
+            @Override
+            public boolean valueIsValid(@Nullable final Object value) {
+                return value != null && value instanceof Boolean;
+            }
+        },
+
         /** The localization with respect to the side of the body of the specified cancer. */
         LATERALITY("laterality");
 
-        /** @see #getName() */
-        private final String name;
+        /** @see #getProperty() */
+        private final String property;
 
         /**
-         * Constructor that initializes the meta-datum.
+         * Constructor that initializes the property.
          *
-         * @param name the name of the meta-datum
+         * @param property the name of the qualifier property
          * @see #getName()
          */
-        Meta(final String name)
+        CancerQualifierProperty(@Nonnull final String property)
         {
-            this.name = name;
+            this.property = property;
+        }
+
+        /**
+         * Extracts a value from {@code qualifier} for {@link #getProperty()}.
+         *
+         * @param qualifier the {@link BaseObject} qualifier that contains various properties
+         * @return a value for {@link #getProperty()} stored in {@code qualifier}; {@code null} if no such value stored
+         */
+        @Nullable
+        public Object extractValue(@Nonnull final BaseObject qualifier)
+        {
+            final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
+            return field == null ? null : field.getValue();
+        }
+
+        /**
+         * Checks if the value selected for the type of property is valid.
+         *
+         * @param value the potential value for {@link #getProperty()}
+         * @return true iff the value is valid
+         */
+        public boolean valueIsValid(@Nullable final Object value)
+        {
+            return value != null && value instanceof String;
         }
 
         @Override
@@ -77,41 +132,32 @@ public interface CancerQualifier extends VocabularyProperty
         }
 
         /**
-         * Get the name of this meta-datum.
+         * Get the name of this property.
          *
-         * @return the name of the meta-datum
+         * @return the name of the property
          */
-        public String getName()
+        @Nonnull
+        public String getProperty()
         {
-            return this.name;
-        }
-
-        /**
-         * Get all possible meta values.
-         *
-         * @return a {@link Set} of all possible meta values
-         */
-        public static Set<String> getNames()
-        {
-            return Arrays.stream(Meta.values()).map(Meta::getName).collect(Collectors.toSet());
+            return this.property;
         }
     }
 
     /**
-     * Retrieve information about this metadata in a JSON format. For example:
+     * Writes cancer qualifier data to {@code baseObject}.
      *
-     * <pre>
-     * {
-     *   "id": "HP:0100615",
-     *   "ageAtDiagnosis": "before_40",
-     *   "numericAgeAtDiagnosis": 31,
-     *   "primary": true,
-     *   "laterality": "l"
-     * }
-     * </pre>
-     *
-     * @return the meta-feature data, using the org.json classes
+     * @param baseObject the {@link BaseObject} that will store cancer qualifier data
+     * @param context the current {@link XWikiContext}
      */
-    @Override
-    JSONObject toJSON();
+    void write(@Nonnull BaseObject baseObject, @Nonnull XWikiContext context);
+
+    /**
+     * Gets the value associated with the provided {@code property}, {@code null} if the {@code property} has no value
+     * associated with it.
+     *
+     * @param property the {@link CancerQualifierProperty} of interest
+     * @return the {@link Object value} associted with the {@code property}, {@code null} if no such value exists
+     */
+    @Nullable
+    Object getProperty(@Nonnull CancerQualifierProperty property);
 }

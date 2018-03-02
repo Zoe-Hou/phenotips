@@ -50,10 +50,6 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
 
     protected static final String AFFECTED_PROPERTY = "affected";
 
-    protected static final String JSON_QUALIFIERS_PROPERTY = "qualifiers";
-
-    protected static final String JSON_CANCER_PROPERTY = "id";
-
     private Set<CancerQualifier> qualifiers;
 
     private boolean affected;
@@ -138,6 +134,7 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
         }
         setAffected(cancer.isAffected());
         setName(cancer.getName());
+        // There is no good way to differentiate between qualifiers, so just add all new qualifiers to collection.
         addQualifiers(cancer.getQualifiers());
         return this;
     }

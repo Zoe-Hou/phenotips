@@ -28,7 +28,6 @@ import org.phenotips.data.PatientWritePolicy;
 import org.phenotips.data.internal.PhenoTipsCancer;
 
 import org.xwiki.component.annotation.Component;
-import org.xwiki.model.reference.EntityReference;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -73,8 +72,6 @@ public class CancersController extends AbstractComplexController<Cancer>
 
     private static final String CONTROLLER_NAME = CANCERS_FIELD_NAME;
 
-    private static final String JSON_KEY_PRIMARY = "primary";
-
     @Inject
     private Logger logger;
 
@@ -82,17 +79,11 @@ public class CancersController extends AbstractComplexController<Cancer>
     @Inject
     private Provider<XWikiContext> xcontextProvider;
 
-    @Nonnull
-    EntityReference getEntityReference()
-    {
-        return Cancer.CLASS_REFERENCE;
-    }
-
     @Override
     @Nonnull
     protected List<String> getBooleanFields()
     {
-        return Collections.singletonList(JSON_KEY_PRIMARY);
+        return Collections.singletonList(Cancer.CancerProperty.AFFECTED);
     }
 
     @Override
@@ -129,7 +120,7 @@ public class CancersController extends AbstractComplexController<Cancer>
     {
         try{
             final XWikiDocument doc = patient.getXDocument();
-            final List<BaseObject> cancerXWikiObjects = doc.getXObjects(getEntityReference());
+            final List<BaseObject> cancerXWikiObjects = doc.getXObjects(Cancer.CLASS_REFERENCE);
             if (CollectionUtils.isEmpty(cancerXWikiObjects)) {
                 return null;
             }
@@ -213,7 +204,7 @@ public class CancersController extends AbstractComplexController<Cancer>
             final PatientData<Cancer> cancers = patient.getData(getName());
             if (cancers == null) {
                 if (PatientWritePolicy.REPLACE.equals(policy)) {
-                    docX.removeXObjects(getEntityReference());
+                    docX.removeXObjects(Cancer.CLASS_REFERENCE);
                 }
             } else {
                 if (!cancers.isIndexed()) {
@@ -258,16 +249,27 @@ public class CancersController extends AbstractComplexController<Cancer>
                             @Nonnull final XWikiContext context)
     {
         try {
-            cancer.write(docX.newXObject(getEntityReference(), context), context);
-            final Collection<CancerQualifier> qualifiers = cancer.getQualifiers();
+            cancer.write(docX.newXObject(Cancer.CLASS_REFERENCE, context), context);
+            cancer.getQualifiers().forEach(qualifier -> saveQualifier(docX, qualifier, context));
         } catch (final XWikiException e) {
-            this.logger.error("Failed to update cancer: [{}]", cancer.getId());
+            this.logger.error("Failed to save cancer: [{}]", cancer.getId());
+        }
+    }
+
+    private void saveQualifier(@Nonnull final XWikiDocument docX,
+                               @Nonnull final CancerQualifier qualifier,
+                               @Nonnull final XWikiContext context)
+    {
+        try {
+            qualifier.write(docX.newXObject(CancerQualifier.CLASS_REFERENCE, context), context);
+        } catch (XWikiException e) {
+            this.logger.error("Failed to save cancer qualifier for cancer: [{}]", qualifier.getId());
         }
     }
 
     private void clearOldCancerData(@Nonnull final XWikiDocument docX)
     {
-        docX.removeXObjects(getEntityReference());
+        docX.removeXObjects(Cancer.CLASS_REFERENCE);
         docX.removeXObjects(CancerQualifier.CLASS_REFERENCE);
     }
 
