@@ -83,7 +83,7 @@ public class CancersController extends AbstractComplexController<Cancer>
     @Nonnull
     protected List<String> getBooleanFields()
     {
-        return Collections.singletonList(Cancer.CancerProperty.AFFECTED);
+        return Collections.singletonList(Cancer.CancerProperty.AFFECTED.getProperty());
     }
 
     @Override
@@ -126,18 +126,13 @@ public class CancersController extends AbstractComplexController<Cancer>
             }
             final List<Cancer> cancers = cancerXWikiObjects.stream()
                     .filter(cancerObj -> cancerObj != null && !cancerObj.getFieldList().isEmpty())
-                    .map(cancerObj -> wrapCancer(doc, cancerObj))
+                    .map(cancerObj -> new PhenoTipsCancer(doc, cancerObj))
                     .collect(Collectors.toList());
             return !cancers.isEmpty() ? new IndexedPatientData<>(getName(), cancers) : null;
         } catch (final Exception e) {
             this.logger.error(ERROR_MESSAGE_LOAD_FAILED, e.getMessage());
         }
         return null;
-    }
-
-    private Cancer wrapCancer(@Nonnull final XWikiDocument doc, @Nonnull final BaseObject cancerObj)
-    {
-        return new PhenoTipsCancer(doc, cancerObj);
     }
 
     @Override
@@ -153,19 +148,6 @@ public class CancersController extends AbstractComplexController<Cancer>
                 data.forEach(cancer -> addCancerJson(cancer, cancersJson));
             }
             json.put(getJsonPropertyName(), cancersJson);
-        }
-    }
-
-    /**
-     * Adds the {@link JSONObject} generated from {@code cancer} to the {@code cancersJson}.
-     *
-     * @param cancer the {@link Cancer} object containing cancer data
-     * @param cancersJson the {@link JSONArray} containing all cancer data for a {@link Patient patient}
-     */
-    private void addCancerJson(@Nonnull final Cancer cancer, @Nonnull final JSONArray cancersJson)
-    {
-        if (StringUtils.isNotBlank(cancer.getId())) {
-            cancersJson.put(cancer.toJSON());
         }
     }
 
@@ -204,7 +186,7 @@ public class CancersController extends AbstractComplexController<Cancer>
             final PatientData<Cancer> cancers = patient.getData(getName());
             if (cancers == null) {
                 if (PatientWritePolicy.REPLACE.equals(policy)) {
-                    docX.removeXObjects(Cancer.CLASS_REFERENCE);
+                    clearOldCancerData(docX);
                 }
             } else {
                 if (!cancers.isIndexed()) {
@@ -215,6 +197,19 @@ public class CancersController extends AbstractComplexController<Cancer>
             }
         } catch (final Exception ex) {
             this.logger.error("Failed to save cancers data: {}", ex.getMessage(), ex);
+        }
+    }
+
+    /**
+     * Adds the {@link JSONObject} generated from {@code cancer} to the {@code cancersJson}.
+     *
+     * @param cancer the {@link Cancer} object containing cancer data
+     * @param cancersJson the {@link JSONArray} containing all cancer data for a {@link Patient patient}
+     */
+    private void addCancerJson(@Nonnull final Cancer cancer, @Nonnull final JSONArray cancersJson)
+    {
+        if (StringUtils.isNotBlank(cancer.getId())) {
+            cancersJson.put(cancer.toJSON());
         }
     }
 
@@ -233,7 +228,6 @@ public class CancersController extends AbstractComplexController<Cancer>
                              @Nonnull final PatientWritePolicy policy,
                              @Nonnull final XWikiContext context)
     {
-
         if (PatientWritePolicy.MERGE.equals(policy)) {
             final Map<String, Cancer> mergedCancers = getMergedCancers(cancers, load(patient));
             clearOldCancerData(docX);
@@ -244,6 +238,13 @@ public class CancersController extends AbstractComplexController<Cancer>
         }
     }
 
+    /**
+     * Saves the data stored in {@code cancer} to the provided {@code docX}.
+     *
+     * @param docX the {@link XWikiDocument} where cancer data will be saved
+     * @param cancer the {@link Cancer} object that contains the data
+     * @param context the current {@link XWikiContext}
+     */
     private void saveCancer(@Nonnull final XWikiDocument docX,
                             @Nonnull final Cancer cancer,
                             @Nonnull final XWikiContext context)
@@ -256,6 +257,13 @@ public class CancersController extends AbstractComplexController<Cancer>
         }
     }
 
+    /**
+     * Saves the data stored in cancer {@code qualifier} to the provided {@code docX}.
+     *
+     * @param docX the {@link XWikiDocument} where cancer qualifier data will be saved
+     * @param qualifier the {@link CancerQualifier} object that contains the data
+     * @param context the current {@link XWikiContext}
+     */
     private void saveQualifier(@Nonnull final XWikiDocument docX,
                                @Nonnull final CancerQualifier qualifier,
                                @Nonnull final XWikiContext context)
@@ -267,12 +275,24 @@ public class CancersController extends AbstractComplexController<Cancer>
         }
     }
 
+    /**
+     * Clears any cancer and qualifier data that is currently stored.
+     *
+     * @param docX the {@link XWikiDocument} that contains the data
+     */
     private void clearOldCancerData(@Nonnull final XWikiDocument docX)
     {
         docX.removeXObjects(Cancer.CLASS_REFERENCE);
         docX.removeXObjects(CancerQualifier.CLASS_REFERENCE);
     }
 
+    /**
+     * Merges stored and new cancer data.
+     *
+     * @param cancers the {@link PatientData} object that contains new cancer data
+     * @param storedCancers the {@link PatientData} object that contains stored cancer data
+     * @return a map of cancer identifiers to {@link Cancer} objects with merged data
+     */
     @Nonnull
     private Map<String, Cancer> getMergedCancers(@Nonnull final PatientData<Cancer> cancers,
                                                  @Nullable final PatientData<Cancer> storedCancers)
@@ -285,6 +305,14 @@ public class CancersController extends AbstractComplexController<Cancer>
                 .collect(Collectors.toMap(Cancer::getId, Function.identity(), this::mergeCancers, LinkedHashMap::new));
     }
 
+    /**
+     * Merges the data in {@code oldCancer} and {@code newCancer}. Any conflicts in data will be resolved in favour of
+     * {@code newCancer}.
+     *
+     * @param oldCancer the {@link Cancer} object with currently stored cancer data
+     * @param newCancer the {@link Cancer} object with updated cancer data
+     * @return the {@link Cancer} object with merged cancer data
+     */
     @Nonnull
     private Cancer mergeCancers(@Nonnull final Cancer oldCancer, @Nonnull final Cancer newCancer)
     {

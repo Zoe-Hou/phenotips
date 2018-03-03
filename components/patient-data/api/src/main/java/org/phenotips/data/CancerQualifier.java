@@ -49,14 +49,38 @@ public interface CancerQualifier extends VocabularyProperty
      */
     enum CancerQualifierProperty
     {
+        /** The cancer with which the qualifier is associated with. */
+        CANCER("cancer") {
+            @Nullable
+            @Override
+            public String extractValue(@Nonnull final BaseObject qualifier)
+            {
+                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
+                return field == null ? null : field.getValue();
+            }
+
+            @Override
+            public boolean valueIsValid(@Nullable final Object value) {
+                return value != null && value instanceof String;
+            }
+        },
+
         /** An age at which the cancer is diagnosed. */
-        AGE_AT_DIAGNOSIS("ageAtDiagnosis"),
+        AGE_AT_DIAGNOSIS("ageAtDiagnosis") {
+            @Nullable
+            @Override
+            public String extractValue(@Nonnull final BaseObject qualifier)
+            {
+                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
+                return field == null ? null : field.getValue();
+            }
+        },
 
         /** The numeric age estimate at which the cancer is diagnosed. */
         NUMERIC_AGE_AT_DIAGNOSIS("numericAgeAtDiagnosis") {
             @Nullable
             @Override
-            public Object extractValue(@Nonnull final BaseObject qualifier)
+            public Integer extractValue(@Nonnull final BaseObject qualifier)
             {
                 final int value = qualifier.getIntValue(this.property, -1);
                 return value == -1 ? null : value;
@@ -72,7 +96,7 @@ public interface CancerQualifier extends VocabularyProperty
         PRIMARY("primary") {
             @Nullable
             @Override
-            public Object extractValue(@Nonnull final BaseObject qualifier)
+            public Boolean extractValue(@Nonnull final BaseObject qualifier)
             {
                 final int value = qualifier.getIntValue(this.property, -1);
                 return value == -1 ? null : (value == 1);
@@ -85,7 +109,15 @@ public interface CancerQualifier extends VocabularyProperty
         },
 
         /** The localization with respect to the side of the body of the specified cancer. */
-        LATERALITY("laterality");
+        LATERALITY("laterality") {
+            @Nullable
+            @Override
+            public String extractValue(@Nonnull final BaseObject qualifier)
+            {
+                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
+                return field == null ? null : field.getValue();
+            }
+        };
 
         /** @see #getProperty() */
         private final String property;
@@ -108,11 +140,7 @@ public interface CancerQualifier extends VocabularyProperty
          * @return a value for {@link #getProperty()} stored in {@code qualifier}; {@code null} if no such value stored
          */
         @Nullable
-        public Object extractValue(@Nonnull final BaseObject qualifier)
-        {
-            final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
-            return field == null ? null : field.getValue();
-        }
+        public abstract Object extractValue(@Nonnull BaseObject qualifier);
 
         /**
          * Checks if the value selected for the type of property is valid.
