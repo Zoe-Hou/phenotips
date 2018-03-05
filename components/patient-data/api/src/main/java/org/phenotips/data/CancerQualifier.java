@@ -18,11 +18,10 @@
 package org.phenotips.data;
 
 import org.phenotips.Constants;
+
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
 import org.xwiki.stability.Unstable;
-
-import java.util.Locale;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -32,7 +31,7 @@ import com.xpn.xwiki.objects.BaseObject;
 import com.xpn.xwiki.objects.BaseStringProperty;
 
 /**
- * Information about the {@link Patient patient}'s {@link CancerQualifier qualifier} metadatum.
+ * Information about the {@link Patient patient}'s {@link CancerQualifier qualifier}.
  *
  * @version $Id$
  * @since 1.4
@@ -40,7 +39,7 @@ import com.xpn.xwiki.objects.BaseStringProperty;
 @Unstable
 public interface CancerQualifier extends VocabularyProperty
 {
-    /** The XClass used for storing cancer metadata. */
+    /** The XClass used for storing cancer qualifier data. */
     EntityReference CLASS_REFERENCE = new EntityReference("CancerQualifierClass", EntityType.DOCUMENT,
             Constants.CODE_SPACE_REFERENCE);
 
@@ -49,75 +48,70 @@ public interface CancerQualifier extends VocabularyProperty
      */
     enum CancerQualifierProperty
     {
-        /** The cancer with which the qualifier is associated with. */
-        CANCER("cancer") {
-            @Nullable
+        /** The cancer that the qualifier is associated with. */
+        CANCER("cancer")
+        {
             @Override
-            public String extractValue(@Nonnull final BaseObject qualifier)
+            public boolean valueIsValid(@Nullable final Object value)
             {
-                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
-                return field == null ? null : field.getValue();
-            }
-
-            @Override
-            public boolean valueIsValid(@Nullable final Object value) {
                 return value != null && value instanceof String;
             }
         },
 
         /** An age at which the cancer is diagnosed. */
-        AGE_AT_DIAGNOSIS("ageAtDiagnosis") {
-            @Nullable
-            @Override
-            public String extractValue(@Nonnull final BaseObject qualifier)
-            {
-                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
-                return field == null ? null : field.getValue();
-            }
-        },
+        AGE_AT_DIAGNOSIS("ageAtDiagnosis"),
 
         /** The numeric age estimate at which the cancer is diagnosed. */
-        NUMERIC_AGE_AT_DIAGNOSIS("numericAgeAtDiagnosis") {
+        NUMERIC_AGE_AT_DIAGNOSIS("numericAgeAtDiagnosis")
+        {
             @Nullable
             @Override
             public Integer extractValue(@Nonnull final BaseObject qualifier)
             {
-                final int value = qualifier.getIntValue(this.property, -1);
+                final int value = qualifier.getIntValue(getProperty(), -1);
                 return value == -1 ? null : value;
             }
 
             @Override
-            public boolean valueIsValid(@Nullable final Object value) {
+            public boolean valueIsValid(@Nullable final Object value)
+            {
                 return value != null && value instanceof Integer;
             }
         },
 
-        /** The type of cancer -- can be primary or metastasized (if primary is false). */
-        PRIMARY("primary") {
+        /** The type of cancer -- can be primary (primary = true) or metastasized (primary = false). */
+        PRIMARY("primary")
+        {
             @Nullable
             @Override
             public Boolean extractValue(@Nonnull final BaseObject qualifier)
             {
-                final int value = qualifier.getIntValue(this.property, -1);
+                final int value = qualifier.getIntValue(getProperty(), -1);
                 return value == -1 ? null : (value == 1);
             }
 
             @Override
-            public boolean valueIsValid(@Nullable final Object value) {
+            public void writeValue(@Nonnull final BaseObject qualifier,
+                                   @Nullable final Object value,
+                                   @Nonnull final XWikiContext context)
+            {
+                if (valueIsValid(value)) {
+                    qualifier.set(getProperty(), (Boolean) value ? 1 : 0, context);
+                }
+            }
+
+            @Override
+            public boolean valueIsValid(@Nullable final Object value)
+            {
                 return value != null && value instanceof Boolean;
             }
         },
 
         /** The localization with respect to the side of the body of the specified cancer. */
-        LATERALITY("laterality") {
-            @Nullable
-            @Override
-            public String extractValue(@Nonnull final BaseObject qualifier)
-            {
-                final BaseStringProperty field = (BaseStringProperty) qualifier.getField(this.property);
-                return field == null ? null : field.getValue();
-            }
-        };
+        LATERALITY("laterality"),
+
+        /** Any notes entered for the qualifier. */
+        NOTES("notes");
 
         /** @see #getProperty() */
         private final String property;
@@ -140,7 +134,27 @@ public interface CancerQualifier extends VocabularyProperty
          * @return a value for {@link #getProperty()} stored in {@code qualifier}; {@code null} if no such value stored
          */
         @Nullable
-        public abstract Object extractValue(@Nonnull BaseObject qualifier);
+        public Object extractValue(@Nonnull final BaseObject qualifier)
+        {
+            final BaseStringProperty field = (BaseStringProperty) qualifier.getField(getProperty());
+            return field == null ? null : field.getValue();
+        }
+
+        /**
+         * Writes a value to {@code qualifier} for {@link #getProperty()}.
+         *
+         * @param qualifier the {@link BaseObject} qualifier object where data will be written
+         * @param value the value to write
+         * @param context the current {@link XWikiContext}
+         */
+        public void writeValue(@Nonnull final BaseObject qualifier,
+                               @Nullable final Object value,
+                               @Nonnull final XWikiContext context)
+        {
+            if (valueIsValid(value)) {
+                qualifier.set(getProperty(), value, context);
+            }
+        }
 
         /**
          * Checks if the value selected for the type of property is valid.
@@ -156,7 +170,7 @@ public interface CancerQualifier extends VocabularyProperty
         @Override
         public String toString()
         {
-            return this.name().toLowerCase(Locale.ROOT);
+            return getJsonProperty();
         }
 
         /**
@@ -169,10 +183,21 @@ public interface CancerQualifier extends VocabularyProperty
         {
             return this.property;
         }
+
+        /**
+         * Returns the name of this property for JSON.
+         *
+         * @return the name of the property
+         */
+        @Nonnull
+        public String getJsonProperty()
+        {
+            return this.property;
+        }
     }
 
     /**
-     * Writes cancer qualifier data to {@code baseObject}.
+     * Writes cancer qualifier data to the provided {@code baseObject}.
      *
      * @param baseObject the {@link BaseObject} that will store cancer qualifier data
      * @param context the current {@link XWikiContext}

@@ -19,14 +19,14 @@ package org.phenotips.data.internal;
 
 import org.phenotips.data.CancerQualifier;
 
-import org.json.JSONObject;
-
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+
+import org.json.JSONObject;
 
 import com.xpn.xwiki.XWikiContext;
 import com.xpn.xwiki.objects.BaseObject;
@@ -43,8 +43,8 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
     /** All the permitted qualifier properties. */
     private static final CancerQualifierProperty[] PROPERTIES = CancerQualifierProperty.values();
 
-    /** The qualifier data. */
-    private final Map<String, Object> qualifier;
+    /** A map of JSON qualifier property name to property value. */
+    private final Map<CancerQualifier.CancerQualifierProperty, Object> qualifierData;
 
     /**
      * The constructor that takes the qualifier {@link BaseObject} as a parameter.
@@ -55,8 +55,8 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
     PhenoTipsCancerQualifier(@Nonnull final BaseObject qualifierObj)
     {
         super((String) CancerQualifierProperty.CANCER.extractValue(qualifierObj));
-        this.qualifier = Arrays.stream(PROPERTIES)
-            .collect(LinkedHashMap::new, (m, p) -> extractValueFromBaseObj(qualifierObj, m, p), LinkedHashMap::putAll);
+        this.qualifierData = Arrays.stream(PROPERTIES)
+            .collect(LinkedHashMap::new, (m, p) -> extractValueFromObj(qualifierObj, m, p), LinkedHashMap::putAll);
     }
 
     /**
@@ -67,29 +67,29 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
      */
     PhenoTipsCancerQualifier(@Nonnull final JSONObject json)
     {
-        super(json.optString(CancerQualifierProperty.CANCER.getProperty(), null));
-        this.qualifier = Arrays.stream(PROPERTIES)
+        super(json.optString(CancerQualifierProperty.CANCER.getJsonProperty(), null));
+        this.qualifierData = Arrays.stream(PROPERTIES)
             .collect(LinkedHashMap::new, (m, p) -> extractValueFromJson(json, m, p), LinkedHashMap::putAll);
     }
 
     @Override
-    public void write(@Nonnull final BaseObject baseObject, final @Nonnull XWikiContext context)
+    public void write(@Nonnull final BaseObject baseObject, @Nonnull final XWikiContext context)
     {
-        this.qualifier.forEach((property, value) -> writeProperty(baseObject, property, value, context));
+        this.qualifierData.forEach((property, value) -> property.writeValue(baseObject, value, context));
     }
 
     @Nullable
     @Override
     public Object getProperty(@Nonnull final CancerQualifierProperty property)
     {
-        return this.qualifier.get(property.getProperty());
+        return this.qualifierData.get(property);
     }
 
     @Override
     @Nonnull
     public JSONObject toJSON()
     {
-        return new JSONObject(this.qualifier);
+        return new JSONObject(this.qualifierData);
     }
 
     /**
@@ -102,25 +102,7 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
     {
         // Cannot change the identifier.
         if (property != CancerQualifierProperty.CANCER && property.valueIsValid(value)) {
-            this.qualifier.put(property.getProperty(), value);
-        }
-    }
-
-    /**
-     * Writes a {@code property} to {@code baseObject} if the {@code property} is defined.
-     *
-     * @param baseObject the {@link BaseObject} where data will be written
-     * @param property the property of interest
-     * @param value the property value
-     * @param context the current {@link XWikiContext}
-     */
-    private void writeProperty(@Nonnull final BaseObject baseObject,
-        @Nonnull final String property,
-        @Nullable final Object value,
-        @Nonnull final XWikiContext context)
-    {
-        if (value != null) {
-            baseObject.set(property, value, context);
+            this.qualifierData.put(property, value);
         }
     }
 
@@ -133,13 +115,12 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
      * @param property the {@link CancerQualifierProperty} property of interest
      */
     private void extractValueFromJson(@Nonnull final JSONObject json,
-                                      @Nonnull final Map<String, Object> propertyMap,
+                                      @Nonnull final Map<CancerQualifier.CancerQualifierProperty, Object> propertyMap,
                                       @Nonnull final CancerQualifierProperty property)
     {
-        final String propertyStr = property.getProperty();
-        final Object value = json.opt(propertyStr);
+        final Object value = json.opt(property.getJsonProperty());
         if (property.valueIsValid(value)) {
-            propertyMap.put(propertyStr, value);
+            propertyMap.put(property, value);
         }
     }
 
@@ -151,14 +132,13 @@ public class PhenoTipsCancerQualifier extends AbstractPhenoTipsVocabularyPropert
      * @param propertyMap the {@link Map} of qualifier properties to their values
      * @param property the {@link CancerQualifierProperty} property of interest
      */
-    private void extractValueFromBaseObj(@Nonnull final BaseObject qualifierObj,
-                                         @Nonnull final LinkedHashMap<String, Object> propertyMap,
-                                         @Nonnull final CancerQualifierProperty property)
+    private void extractValueFromObj(@Nonnull final BaseObject qualifierObj,
+                                     @Nonnull final Map<CancerQualifier.CancerQualifierProperty, Object> propertyMap,
+                                     @Nonnull final CancerQualifierProperty property)
     {
-        final String propertyStr = property.getProperty();
         final Object value = property.extractValue(qualifierObj);
         if (property.valueIsValid(value)) {
-            propertyMap.put(propertyStr, value);
+            propertyMap.put(property, value);
         }
     }
 }

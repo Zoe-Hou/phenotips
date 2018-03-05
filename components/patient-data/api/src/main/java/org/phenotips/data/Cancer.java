@@ -17,20 +17,20 @@
  */
 package org.phenotips.data;
 
-import com.xpn.xwiki.XWikiContext;
-import com.xpn.xwiki.objects.BaseObject;
-import com.xpn.xwiki.objects.BaseStringProperty;
-
 import org.phenotips.Constants;
+
 import org.xwiki.model.EntityType;
 import org.xwiki.model.reference.EntityReference;
 import org.xwiki.stability.Unstable;
 
+import java.util.Collection;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import java.util.Collection;
-import java.util.Locale;
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.objects.BaseObject;
+import com.xpn.xwiki.objects.BaseStringProperty;
 
 /**
  * Information about a specific cancer recorded for a {@link Patient patient}.
@@ -50,14 +50,25 @@ public interface Cancer extends VocabularyProperty
      */
     enum CancerProperty
     {
-        /** An age at which the cancer is diagnosed. */
-        CANCER("cancer") {
+        /** The cancer identifier. */
+        CANCER("cancer")
+        {
             @Nullable
             @Override
             public String extractValue(@Nonnull final BaseObject cancer)
             {
-                final BaseStringProperty field = (BaseStringProperty) cancer.getField(this.property);
+                final BaseStringProperty field = (BaseStringProperty) cancer.getField(getProperty());
                 return field == null ? null : field.getValue();
+            }
+
+            @Override
+            public void writeValue(@Nonnull final BaseObject cancer,
+                                   @Nullable final Object value,
+                                   @Nonnull final XWikiContext context)
+            {
+                if (valueIsValid(value)) {
+                    cancer.set(getProperty(), value, context);
+                }
             }
 
             @Override
@@ -65,20 +76,39 @@ public interface Cancer extends VocabularyProperty
             {
                 return value != null && value instanceof String;
             }
+
+            @Nonnull
+            @Override
+            public String getJsonProperty()
+            {
+                return "id";
+            }
         },
 
-        /** The numeric age estimate at which the cancer is diagnosed. */
-        AFFECTED("affected") {
+        /** The field denoting if the individual is affected with the cancer. */
+        AFFECTED("affected")
+        {
             @Nullable
             @Override
             public Boolean extractValue(@Nonnull final BaseObject cancer)
             {
-                final int value = cancer.getIntValue(this.property, -1);
+                final int value = cancer.getIntValue(getProperty(), -1);
                 return value == -1 ? null : (value == 1);
             }
 
             @Override
-            public boolean valueIsValid(@Nullable final Object value) {
+            public void writeValue(@Nonnull final BaseObject cancer,
+                                   @Nullable final Object value,
+                                   @Nonnull final XWikiContext context)
+            {
+                if (valueIsValid(value)) {
+                    cancer.set(getProperty(), (Boolean) value ? 1 : 0, context);
+                }
+            }
+
+            @Override
+            public boolean valueIsValid(@Nullable final Object value)
+            {
                 return value != null && value instanceof Boolean;
             }
         };
@@ -104,7 +134,18 @@ public interface Cancer extends VocabularyProperty
          * @return a value for {@link #getProperty()} stored in {@code cancer}; {@code null} if no such value stored
          */
         @Nullable
-        public abstract Object extractValue(@Nonnull final BaseObject cancer);
+        public abstract Object extractValue(@Nonnull BaseObject cancer);
+
+        /**
+         * Writes a value to {@code cancer} for {@link #getProperty()}.
+         *
+         * @param cancer the {@link BaseObject} cancer object where data will be written
+         * @param value the value to write
+         * @param context the current {@link XWikiContext}
+         */
+        public abstract void writeValue(@Nonnull BaseObject cancer,
+                                        @Nullable Object value,
+                                        @Nonnull XWikiContext context);
 
         /**
          * Checks if the value selected for the type of property is valid.
@@ -112,21 +153,32 @@ public interface Cancer extends VocabularyProperty
          * @param value the potential value for {@link #getProperty()}
          * @return true iff the value is valid
          */
-        public abstract boolean valueIsValid(@Nullable final Object value);
+        public abstract boolean valueIsValid(@Nullable Object value);
 
         @Override
         public String toString()
         {
-            return this.name().toLowerCase(Locale.ROOT);
+            return getJsonProperty();
         }
 
         /**
-         * Get the name of this property.
+         * Get the type of property.
+         *
+         * @return the type of property
+         */
+        @Nonnull
+        public String getProperty()
+        {
+            return this.property;
+        }
+
+        /**
+         * Returns the name of this property for JSON.
          *
          * @return the name of the property
          */
         @Nonnull
-        public String getProperty()
+        public String getJsonProperty()
         {
             return this.property;
         }
@@ -140,9 +192,9 @@ public interface Cancer extends VocabularyProperty
     boolean isAffected();
 
     /**
-     * A collection of {@link CancerQualifier} associated with the cancer. Cancer qualifiers include data such
-     * as cancer type, age at diagnosis, and laterality. Each cancer may have several {@link CancerQualifier}
-     * associated with it.
+     * A collection of {@link CancerQualifier} associated with the cancer. Cancer qualifier objects may contain data
+     * such as cancer type, age at diagnosis, and laterality. Each cancer may have several {@link CancerQualifier}
+     * objects associated with it, signifying multiple occurrences.
      *
      * @return a collection of {@link CancerQualifier} associated with the given {@link Cancer}
      */

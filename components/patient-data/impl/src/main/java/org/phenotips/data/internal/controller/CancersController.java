@@ -17,7 +17,6 @@
  */
 package org.phenotips.data.internal.controller;
 
-import com.xpn.xwiki.XWikiException;
 import org.phenotips.data.Cancer;
 import org.phenotips.data.CancerQualifier;
 import org.phenotips.data.IndexedPatientData;
@@ -54,6 +53,7 @@ import org.json.JSONObject;
 import org.slf4j.Logger;
 
 import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.XWikiException;
 import com.xpn.xwiki.doc.XWikiDocument;
 import com.xpn.xwiki.objects.BaseObject;
 
@@ -118,7 +118,7 @@ public class CancersController extends AbstractComplexController<Cancer>
     @Nullable
     public PatientData<Cancer> load(@Nonnull final Patient patient)
     {
-        try{
+        try {
             final XWikiDocument doc = patient.getXDocument();
             final List<BaseObject> cancerXWikiObjects = doc.getXObjects(Cancer.CLASS_REFERENCE);
             if (CollectionUtils.isEmpty(cancerXWikiObjects)) {

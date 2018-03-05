@@ -17,9 +17,6 @@
  */
 package org.phenotips.data.internal;
 
-import com.xpn.xwiki.XWikiContext;
-import com.xpn.xwiki.doc.XWikiDocument;
-import org.apache.commons.collections4.CollectionUtils;
 import org.phenotips.data.Cancer;
 import org.phenotips.data.CancerQualifier;
 
@@ -38,10 +35,13 @@ import java.util.stream.IntStream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.doc.XWikiDocument;
 import com.xpn.xwiki.objects.BaseObject;
 
 /**
@@ -53,12 +53,16 @@ import com.xpn.xwiki.objects.BaseObject;
  */
 public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty implements Cancer
 {
+    /** The qualifiers JSON key. */
     private static final String QUALIFIERS_KEY = "qualifiers";
 
+    /** An array of properties recorded for this cancer. */
     private static final CancerProperty[] PROPERTIES = CancerProperty.values();
 
-    private final Map<String, Object> cancerData;
+    /** A map of JSON cancer property name to property value. */
+    private final Map<Cancer.CancerProperty, Object> cancerData;
 
+    /** A set of qualifier objects for this cancer. */
     private Set<CancerQualifier> qualifiers;
 
     /**
@@ -66,18 +70,25 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
      *
      * @param doc the {@link XWikiDocument} where the data is stored
      * @param cancerObject the cancer {@link BaseObject}
+     * @throws IllegalArgumentException if the cancer ID is null
      */
     public PhenoTipsCancer(@Nonnull final XWikiDocument doc, @Nonnull final BaseObject cancerObject)
     {
         super((String) CancerProperty.CANCER.extractValue(cancerObject));
         this.cancerData = Arrays.stream(PROPERTIES)
-            .collect(LinkedHashMap::new, (m, p) -> extractValueFromBaseObj(cancerObject, m, p), LinkedHashMap::putAll);
+            .collect(LinkedHashMap::new, (m, p) -> extractValueFromObj(cancerObject, m, p), LinkedHashMap::putAll);
         this.qualifiers = extractQualifiersFromDoc(doc);
     }
 
+    /**
+     * Constructor that copies the data from a {@code json}.
+     *
+     * @param json the cancer {@link JSONObject}
+     * @throws IllegalArgumentException if the cancer ID is null
+     */
     public PhenoTipsCancer(@Nonnull final JSONObject json)
     {
-        super(json.optString(CancerProperty.CANCER.getProperty(), null));
+        super(json.optString(CancerProperty.CANCER.getJsonProperty(), null));
         this.cancerData = Arrays.stream(PROPERTIES)
             .collect(LinkedHashMap::new, (m, p) -> extractValueFromJson(json, m, p), LinkedHashMap::putAll);
         this.qualifiers = extractQualifiersFromJson(json);
@@ -86,7 +97,7 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     @Override
     public boolean isAffected()
     {
-        return (Boolean) this.cancerData.getOrDefault(CancerProperty.AFFECTED.getProperty(), false);
+        return (Boolean) this.cancerData.getOrDefault(CancerProperty.AFFECTED, false);
     }
 
     @Override
@@ -100,7 +111,7 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     @Override
     public Object getProperty(@Nonnull final Cancer.CancerProperty property)
     {
-        return this.cancerData.get(property.getProperty());
+        return this.cancerData.get(property);
     }
 
     @Override
@@ -109,14 +120,14 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     {
         final JSONArray qualifiersArray = new JSONArray();
         this.qualifiers.forEach(qualifier -> qualifiersArray.put(qualifier.toJSON()));
-        return new JSONObject(this.cancerData).put(QUALIFIERS_KEY, qualifiersArray);
+        return new JSONObject(this.cancerData).put(NAME_JSON_KEY_NAME, getName()).put(QUALIFIERS_KEY, qualifiersArray);
     }
 
     @Nonnull
     @Override
     public Cancer mergeData(@Nonnull final Cancer cancer)
     {
-        if (!Objects.equals(getId(), cancer.getId())) {
+        if (!isSameCancer(cancer)) {
             throw new IllegalArgumentException("Cannot merge cancer objects with different identifiers");
         }
         Arrays.asList(PROPERTIES).forEach(property -> setProperty(property, cancer.getProperty(property)));
@@ -128,7 +139,7 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     @Override
     public void write(@Nonnull final BaseObject baseObject, final @Nonnull XWikiContext context)
     {
-        this.cancerData.forEach((property, value) -> writeProperty(baseObject, property, value, context));
+        this.cancerData.forEach((property, value) -> property.writeValue(baseObject, value, context));
     }
 
     /**
@@ -167,25 +178,7 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     {
         // Should not be able to reset the identifier.
         if (property != CancerProperty.CANCER && property.valueIsValid(value)) {
-            this.cancerData.put(property.getProperty(), value);
-        }
-    }
-
-    /**
-     * Writes a {@code property} to {@code baseObject} if the {@code property} is defined.
-     *
-     * @param baseObject the {@link BaseObject} where data will be written
-     * @param property the property of interest
-     * @param value the property value
-     * @param context the current {@link XWikiContext}
-     */
-    private void writeProperty(@Nonnull final BaseObject baseObject,
-        @Nonnull final String property,
-        @Nullable final Object value,
-        @Nonnull final XWikiContext context)
-    {
-        if (value != null) {
-            baseObject.set(property, value, context);
+            this.cancerData.put(property, value);
         }
     }
 
@@ -198,13 +191,12 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
      * @param property the {@link Cancer.CancerProperty} property of interest
      */
     private void extractValueFromJson(@Nonnull final JSONObject json,
-        @Nonnull final Map<String, Object> propertyMap,
-        @Nonnull final Cancer.CancerProperty property)
+                                      @Nonnull final Map<Cancer.CancerProperty, Object> propertyMap,
+                                      @Nonnull final Cancer.CancerProperty property)
     {
-        final String propertyStr = property.getProperty();
-        final Object value = json.opt(propertyStr);
+        final Object value = json.opt(property.getJsonProperty());
         if (property.valueIsValid(value)) {
-            propertyMap.put(propertyStr, value);
+            propertyMap.put(property, value);
         }
     }
 
@@ -216,14 +208,13 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
      * @param propertyMap the {@link Map} of cancer properties to their values
      * @param property the {@link Cancer.CancerProperty} property of interest
      */
-    private void extractValueFromBaseObj(@Nonnull final BaseObject cancerObj,
-        @Nonnull final LinkedHashMap<String, Object> propertyMap,
-        @Nonnull final Cancer.CancerProperty property)
+    private void extractValueFromObj(@Nonnull final BaseObject cancerObj,
+                                     @Nonnull final Map<Cancer.CancerProperty, Object> propertyMap,
+                                     @Nonnull final Cancer.CancerProperty property)
     {
-        final String propertyStr = property.getProperty();
         final Object value = property.extractValue(cancerObj);
         if (property.valueIsValid(value)) {
-            propertyMap.put(propertyStr, value);
+            propertyMap.put(property, value);
         }
     }
 
@@ -237,12 +228,12 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     @Nonnull
     private Set<CancerQualifier> extractQualifiersFromJson(@Nonnull final JSONObject json)
     {
-        final JSONArray qualifiers = json.optJSONArray(QUALIFIERS_KEY);
-        return qualifiers == null || qualifiers.length() == 0
+        final JSONArray qualifiersArray = json.optJSONArray(QUALIFIERS_KEY);
+        return qualifiersArray == null || qualifiersArray.length() == 0
             ? new HashSet<>()
-            : IntStream.range(0, qualifiers.length())
-                .mapToObj(qualifiers::getJSONObject)
-                .map(PhenoTipsCancerQualifier::new)
+            : IntStream.range(0, qualifiersArray.length())
+                .mapToObj(qualifiersArray::getJSONObject)
+                .map(this::wrapQualifier)
                 .collect(Collectors.toSet());
     }
 
@@ -257,6 +248,8 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     {
         final List<BaseObject> qualifierXWikiObjects = doc.getXObjects(CancerQualifier.CLASS_REFERENCE);
         return qualifierXWikiObjects.stream()
+            .filter(Objects::nonNull)
+            .filter(qualifierObj -> !qualifierObj.getFieldList().isEmpty())
             .filter(this::hasRightId)
             .map(PhenoTipsCancerQualifier::new)
             .collect(Collectors.toSet());
@@ -272,5 +265,34 @@ public class PhenoTipsCancer extends AbstractPhenoTipsVocabularyProperty impleme
     {
         final String property = CancerQualifier.CancerQualifierProperty.CANCER.getProperty();
         return StringUtils.equals(this.id, qualifierObj.getStringValue(property));
+    }
+
+    /**
+     * Returns true iff {@code cancer} and this cancer are the same.
+     *
+     * @param cancer the {@link Cancer} object being compared to this
+     * @return true iff the two objects are the same
+     */
+    private boolean isSameCancer(@Nonnull final Cancer cancer)
+    {
+        final String thisId = getId();
+        return StringUtils.isNotBlank(thisId)
+                ? Objects.equals(thisId, cancer.getId())
+                : Objects.equals(getName(), cancer.getName());
+    }
+
+    /**
+     * Wraps the qualifier JSON data associated with this cancer in a {@link CancerQualifier} object.
+     *
+     * @param qualifierJson the JSON for a qualifier associated with this cancer
+     * @return a {@link CancerQualifier} object containing the JSON data
+     */
+    @Nonnull
+    private CancerQualifier wrapQualifier(@Nonnull final JSONObject qualifierJson)
+    {
+        if (!qualifierJson.has(CancerQualifier.CancerQualifierProperty.CANCER.getJsonProperty())) {
+            qualifierJson.put(CancerQualifier.CancerQualifierProperty.CANCER.getJsonProperty(), getId());
+        }
+        return new PhenoTipsCancerQualifier(qualifierJson);
     }
 }
