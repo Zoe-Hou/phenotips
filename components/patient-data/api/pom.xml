@@ -29,7 +29,7 @@
   <name>PhenoTips - Patient data - Java APIs</name>
 
   <properties>
-    <coverage.instructionRatio>0.93</coverage.instructionRatio>
+    <coverage.instructionRatio>0.66</coverage.instructionRatio>
   </properties>
 
   <dependencies>
@@ -56,6 +56,11 @@
     <dependency>
       <groupId>org.xwiki.platform</groupId>
       <artifactId>xwiki-platform-model</artifactId>
+      <version>${xwiki.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.xwiki.platform</groupId>
+      <artifactId>xwiki-platform-oldcore</artifactId>
       <version>${xwiki.version}</version>
     </dependency>
     <dependency>

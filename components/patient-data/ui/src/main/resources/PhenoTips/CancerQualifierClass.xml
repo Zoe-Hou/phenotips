@@ -121,7 +121,7 @@
       <disabled>0</disabled>
       <name>numericAgeAtDiagnosis</name>
       <number>6</number>
-      <numberType>long</numberType>
+      <numberType>integer</numberType>
       <prettyName>numericAgeAtDiagnosis</prettyName>
       <size>30</size>
       <unmodifiable>0</unmodifiable>
